@@ -1,0 +1,352 @@
+// Define LED_BUILTIN if not defined by the board
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 13
+#endif
+
+#include <LiquidCrystal.h>
+#include <Wire.h>
+#include <RTClib.h>
+#include <EEPROM.h>
+
+int pushVal = 0;
+int val;
+int val2;
+int addr = 0;
+int info = 0;   // Variable for the information coming from the Bluetooth module
+int state = 0;  // Simple variable for displaying the state
+int LED = 13;   // LED pin
+
+RTC_DS3231 rtc;
+
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;  // LCD pins
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+#define getWellsoon 0
+#define HELP_SCREEN 1
+#define TIME_SCREEN 2
+
+int pushpressed = 0;
+const int ledPin = LED_BUILTIN;  // Buzzer and LED pin
+int ledState = LOW;
+int Signal = 0;
+
+int buzz = 13;
+
+int push1state, push2state, push3state, stopinState = 0;
+int push1Flag, push2Flag, Push3Flag = false;
+
+int push1pin = 9;
+int push2pin = 8;
+int push3pin = 7;
+int stopPin = A0;
+
+int screens = 0;
+int maxScreen = 2;
+bool isScreenChanged = true;
+
+long previousMillis = 0;
+long interval = 500;  // Buzzing interval
+unsigned long currentMillis;
+
+long previousMillisLCD = 0;  // For LCD screen update
+long intervalLCD = 2000;    // Screen cycling interval
+unsigned long currentMillisLCD;
+
+// Set Reminder Change Time
+int buzz8amHH = 8;   // Hours (24-hour format)
+int buzz8amMM = 0;   // Minutes
+int buzz8amSS = 0;   // Seconds
+
+int buzz2pmHH = 14;
+int buzz2pmMM = 0;
+int buzz2pmSS = 0;
+
+int buzz8pmHH = 20;
+int buzz8pmMM = 0;
+int buzz8pmSS = 0;
+
+int nowHr, nowMin, nowSec;  // To show current hh, mm, ss
+
+// All messages
+void gwsMessege() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Stay Healthy :)");
+  Serial.println("Stay Healthy :)");
+  Serial.println("Get Well Soon :)");
+  lcd.setCursor(0, 1);
+  lcd.print("Get Well Soon :)");
+}
+
+void helpScreen() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Press Buttons");
+  lcd.setCursor(0, 1);
+  lcd.print("for Reminder...!");
+}
+
+void timeScreen() {
+  DateTime now = rtc.now();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Time:");
+  lcd.setCursor(6, 0);
+  lcd.print(nowHr = now.hour(), DEC);
+  lcd.print(":");
+  lcd.print(nowMin = now.minute(), DEC);
+  lcd.print(":");
+  lcd.print(nowSec = now.second(), DEC);
+  lcd.setCursor(0, 1);
+  lcd.print("Date: ");
+  lcd.print(now.day(), DEC);
+  lcd.print("/");
+  lcd.print(now.month(), DEC);
+  lcd.print("/");
+  lcd.print(now.year(), DEC);
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+
+  if (!rtc.begin()) {
+    while (1);
+  }
+
+  if (rtc.lostPower()) {
+    // Set the RTC to the current date and time
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Welcome To");
+  lcd.setCursor(0, 1);
+  lcd.print("Circuit Digest");
+  delay(1000);
+
+  pinMode(push1pin, INPUT);
+  pinMode(push2pin, INPUT);
+  pinMode(push3pin, INPUT);
+  pinMode(stopPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+  delay(200);
+
+  val2 = EEPROM.read(addr);
+  switch (val2) {
+    case 1:
+      push1state = 1;
+      push2state = 0;
+      push3state = 0;
+      pushVal = 1;
+      break;
+    case 2:
+      push1state = 0;
+      push2state = 1;
+      push3state = 0;
+      pushVal = 2;
+      break;
+    case 3:
+      push1state = 0;
+      push2state = 0;
+      push3state = 1;
+      pushVal = 3;
+      break;
+  }
+}
+
+void loop() {
+  bluetooth();
+  push1();
+  push2();
+  push3();
+
+  if (pushVal == 1) {
+    at8am();
+  } else if (pushVal == 2) {
+    at8am();
+    at8pm();
+  } else if (pushVal == 3) {
+    at8am();
+    at2pm();
+    at8pm();
+  }
+
+  currentMillisLCD = millis();
+  push1state = digitalRead(push1pin);
+  push2state = digitalRead(push2pin);
+  push3state = digitalRead(push3pin);
+  stopinState = digitalRead(stopPin);
+
+  stopPins();
+  changeScreen();
+}
+
+// Push buttons
+void push1() {
+  if (push1state == 1) {
+    push1state = 0;
+    push2state = 0;
+    push3state = 0;
+    EEPROM.write(addr, 1);
+    Serial.print("Push1 Written : ");
+    Serial.println(EEPROM.read(addr));
+    pushVal = 1;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Reminder set ");
+    lcd.setCursor(0, 1);
+    lcd.print("for Once/day !");
+    delay(1200);
+    lcd.clear();
+  }
+}
+
+void push2() {
+  if (push2state == 1) {
+    push2state = 0;
+    push1state = 0;
+    push3state = 0;
+    EEPROM.write(addr, 2);
+    Serial.print("Push2 Written : ");
+    Serial.println(EEPROM.read(addr));
+    pushVal = 2;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Reminder set ");
+    lcd.setCursor(0, 1);
+    lcd.print("for Twice/day !");
+    delay(1200);
+    lcd.clear();
+  }
+}
+
+void push3() {
+  if (push3state == 1) {
+    push3state = 0;
+    push1state = 0;
+    push2state = 0;
+    EEPROM.write(addr, 3);
+    Serial.print("Push3 Written : ");
+    Serial.println(EEPROM.read(addr));
+    pushVal = 3;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Reminder set ");
+    lcd.setCursor(0, 1);
+    lcd.print("for Thrice/day !");
+    delay(1200);
+    lcd.clear();
+  }
+}
+
+void stopPins() {
+  if (stopinState == 1) {
+    pushpressed = 1;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Take Medicine  ");
+    lcd.setCursor(0, 1);
+    lcd.print("with Warm Water");
+    delay(1200);
+    lcd.clear();
+  }
+}
+
+void startBuzz() {
+  if (pushpressed == 0) {
+    Serial.println("pushpressed is false in blink");
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+      previousMillis = currentMillis;
+      Serial.println("Start Buzzing");
+      if (ledState == LOW) {
+        ledState = HIGH;
+      } else {
+        ledState = LOW;
+      }
+      digitalWrite(ledPin, ledState);
+    }
+  } else if (pushpressed == 1) {
+    Serial.println("pushpressed is true");
+    ledState = LOW;
+    digitalWrite(ledPin, ledState);
+  }
+}
+
+void at8am() {
+  DateTime now = rtc.now();
+  if (now.hour() == buzz8amHH && now.minute() == buzz8amMM && now.second() == buzz8amSS) {
+    startBuzz();
+  }
+}
+
+void at2pm() {
+  DateTime now = rtc.now();
+  if (now.hour() == buzz2pmHH && now.minute() == buzz2pmMM && now.second() == buzz2pmSS) {
+    startBuzz();
+  }
+}
+
+void at8pm() {
+  DateTime now = rtc.now();
+  if (now.hour() == buzz8pmHH && now.minute() == buzz8pmMM && now.second() == buzz8pmSS) {
+    startBuzz();
+  }
+}
+
+// Screen Cycling
+void changeScreen() {
+  if (currentMillisLCD - previousMillisLCD > intervalLCD) {
+    previousMillisLCD = currentMillisLCD;
+    screens++;
+    if (screens > maxScreen) {
+      screens = 0;
+    }
+    isScreenChanged = true;
+  }
+
+  if (isScreenChanged) {
+    isScreenChanged = false;
+    switch (screens) {
+      case getWellsoon:
+        gwsMessege();
+        break;
+      case HELP_SCREEN:
+        helpScreen();
+        break;
+      case TIME_SCREEN:
+        timeScreen();
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+void bluetooth() {
+  if (Serial.available() > 0) {
+    info = Serial.read(); // Read the incoming data
+
+    switch (info) {
+      case '1':
+        digitalWrite(LED, HIGH); // Turn on LED
+        state = 1;
+        Serial.println("LED ON");
+        break;
+      case '0':
+        digitalWrite(LED, LOW); // Turn off LED
+        state = 0;
+        Serial.println("LED OFF");
+        break;
+      default:
+        Serial.println("Invalid Command");
+        break;
+    }
+  }
+}
+
+ 
