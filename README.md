@@ -47,6 +47,7 @@ This project is an **IoT-enabled smart medicine reminder** designed to help pati
 ---
 
 ## 📁 File Structure
+![image](https://github.com/user-attachments/assets/521adaee-c5b8-4b5e-a329-2350261ab55f)
 
 
 ---
